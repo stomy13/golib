@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
@@ -13,9 +15,37 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
-func useConnect() {
+// ランダムな文字列を生成する関数
+func generateRandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
 
+func useConnect() {
 	mux := http.NewServeMux()
+
+	// CORS設定を追加
+	interceptor := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, Connect-Protocol-Version")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			h.ServeHTTP(w, r)
+		})
+	}
+
 	reflector := grpcreflect.NewStaticReflector(
 		pingv1connect.PingServiceName,
 		// protoc-gen-connect-go generates package-level constants
@@ -33,9 +63,8 @@ func useConnect() {
 	mux.Handle(pingv1connect.NewPingServiceHandler(&PingServer{}))
 	err := http.ListenAndServe(
 		"localhost:8080",
-		// For gRPC clients, it's convenient to support HTTP/2 without TLS. You can
-		// avoid x/net/http2 by using http.ListenAndServeTLS.
-		h2c.NewHandler(mux, &http2.Server{}),
+		// CORSミドルウェアを適用
+		interceptor(h2c.NewHandler(mux, &http2.Server{})),
 	)
 	log.Fatalf("listen failed: %v", err)
 }
@@ -55,6 +84,7 @@ func (ps *PingServer) Ping(
 		// req.Msg is a strongly-typed *pingv1.PingRequest, so we can access its
 		// fields without type assertions.
 		Number: req.Msg.Number,
+		Text:   generateRandomString(10), // 10文字のランダムな文字列を生成
 	})
 	res.Header().Set("Some-Other-Header", "hello!")
 	return res, nil

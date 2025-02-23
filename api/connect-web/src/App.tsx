@@ -4,19 +4,19 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 
 // Import service definition that you want to connect to.
-import { ElizaService } from "@buf/connectrpc_eliza.bufbuild_es/connectrpc/eliza/v1/eliza_pb";
+import { PingService } from "./gen/connect/ping/v1/ping_pb";
 
 // The transport defines what type of endpoint we're hitting.
 // In our example we'll be communicating with a Connect endpoint.
 // If your endpoint only supports gRPC-web, make sure to use
 // `createGrpcWebTransport` instead.
 const transport = createConnectTransport({
-  baseUrl: "https://demo.connectrpc.com",
+  baseUrl: "http://localhost:8080",
 });
 
 // Here we make the client itself, combining the service
 // definition with the transport.
-const client = createClient(ElizaService, transport);
+const client = createClient(PingService, transport);
 
 function App() {
   const [inputValue, setInputValue] = useState("");
@@ -47,14 +47,15 @@ function App() {
           message: inputValue,
         },
       ]);
-      const response = await client.say({
-        sentence: inputValue,
+      const response = await client.ping({
+        number: BigInt(123456),
+        text: inputValue,
       });
       setMessages((prev) => [
         ...prev,
         {
           fromMe: false,
-          message: response.sentence,
+          message: `number: ${response.number}, text: ${response.text}`,
         },
       ]);
     }}>
